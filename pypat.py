@@ -8,7 +8,7 @@ class Matchable:
     @classmethod
     @abc.abstractmethod
     def pattern(cls, *args):
-        raise UnimplementedException('decompose unimplemented in class %s' % cls)
+        raise UnimplementedException('pattern unimplemented in class %s' % cls)
 class PureMatchable(Matchable):
     def __new__(typ, *args, **kwargs):
         obj = super().__new__(typ)
