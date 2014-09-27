@@ -249,6 +249,20 @@ class TestExamples(unittest.TestCase):
         self.assertRaises(PatternException, lambda: foo(3,'a'))
         self.assertRaises(PatternException, lambda: foo(22))
 
+    # Match object can be built and cases added to them.
+    def test_matchobj(self):
+        matcher = Match([(42, lambda: 'yes')])
+        matcher.add('x', Guard(lambda x: isinstance(x, int)), lambda x: x)
+        matcher.add(('x', 'y'), lambda x,y: x + y)
+
+        self.assertEqual(matcher(42), 'yes')
+        self.assertEqual(matcher(120), 120)
+        self.assertEqual(matcher((1,2)), 3)
+        self.assertRaises(PatternException, lambda: matcher('bluh'))
+
+        matcher.add('_', lambda: 'miss')
+        self.assertEqual(matcher('bluh'), 'miss')
+
 
     # Lambda calculus
     class LC(PureMatchable):

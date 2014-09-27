@@ -138,3 +138,13 @@ def matchable(*data):
         wrap.case = case
         return wrap
     return owrap
+
+class Match(object):
+    def __init__(self, inits=[]):
+        self.cases = []
+        for pattern in inits:
+            self.add(*pattern)
+    def add(self, *case):
+        self.cases.append(case)
+    def __call__(self, target):
+        return match(target, *self.cases)
