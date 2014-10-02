@@ -230,7 +230,7 @@ class TestExamples(unittest.TestCase):
         def foo(x):
             return x
 
-        @foo.case(42)
+        @foo.case(42, Or((-42,)))
         def foo():
             return 'it\'s 42!!'
 
@@ -264,77 +264,158 @@ class TestExamples(unittest.TestCase):
         self.assertEqual(matcher('bluh'), 'miss')
 
 
-    # Lambda calculus
-    class LC(PureMatchable):
-        pass
-    class Abs(LC):
-        def __init__(self, x, e): pass
-    class App(LC):
-        def __init__(self, e1, e2): pass
-    class Var(LC):
-        def __init__(self, x): pass
-
-    def pp(self, e):
-        return match(e, 
-                     (self.Var('x'), 
-                                lambda x: x),
-                     (self.Abs('x', 'e'), 
-                                lambda x,e: '(lambda %s: %s)' % (x, self.pp(e))),
-                     (self.App('e1', 'e2'), 
-                                lambda e1,e2: '%s(%s)' % (self.pp(e1), self.pp(e2))))
-
-    def is_val(self, e):
-        return match(e, 
-              (self.Abs, lambda: True),
-              ('_',      lambda: False))
-    def step(self, e):
-        return match(e,
-                     (self.App(self.Abs('x', 'e1'), 'e2'), 
-                          Guard(lambda x,e1,e2: self.is_val(e2)),
-                                lambda x,e1,e2: self.subst(e1, x, e2)),
-                     (self.App(As('e1', self.Abs), 'e2'), 
-                                lambda e1,e2: self.App(e1, self.step(e2))),
-                     (self.App('e1', 'e2'), 
-                                lambda e1,e2: self.App(self.step(e1), e2)))
-    def subst(self, e, x, v):
-        return match((e, x),
-                     ((self.App('e1', 'e2'), '_'), 
-                                lambda e1,e2: self.App(self.subst(e1,x,v), self.subst(e2,x,v))),
-                     ((As('e1',self.Abs('x', 'eb')), 'x'), 
-                                lambda e1,x,eb: e1),
-                     ((self.Abs('y','e'), '_'), 
-                                lambda y,e: self.Abs(y,self.subst(e,x,v))),
-                     ((self.Var('x'), 'x'), 
-                                lambda x: v),
-                     ((self.Var('y'), '_'), 
-                                lambda y: self.Var(y)))
-    def eval(self, e):
-        return match(e,
-                     ('_', Guard(lambda: self.is_val(e)), lambda: e),
-                     ('_',                                lambda: self.eval(self.step(e))))
-
     def test_lambda(self):
-        plus = self.Abs('m', self.Abs('n', self.Abs('f', self.Abs('x',
-                                              self.App(
-                                                  self.App(self.Var('m'), self.Var('f')),
-                                                  self.App(
-                                                      self.App(self.Var('n'), self.Var('f')),
-                                                      self.Var('x')))))))
-        zero = self.Abs('f', self.Abs('x', self.Var('x')))
-        one = self.Abs('f', self.Abs('x', self.App(self.Var('f'), self.Var('x'))))
-        two = self.Abs('f', self.Abs('x', self.App(self.Var('f'),
-                                                   self.App(self.Var('f'), 
-                                                            self.Var('x')))))
-        three = self.Abs('f', self.Abs('x', self.App(self.Var('f'), 
-                                                     self.App(self.Var('f'),
-                                                              self.App(self.Var('f'), 
-                                                                       self.Var('x'))))))
-        threeq = self.eval(self.App(self.App(plus, one), two))
+        class LC(PureMatchable):
+            pass
+        class Abs(LC):
+            def __init__(self, x, e): pass
+        class App(LC):
+            def __init__(self, e1, e2): pass
+        class Var(LC):
+            def __init__(self, x): pass
+
+
+        # Lambda calculus
+
+        def pp(e):
+            return match(e, 
+                         (Var('x'), lambda x: x),
+                         (Abs('x', 'e'), 
+                                    lambda x,e: '(lambda %s: %s)' % (x, pp(e))),
+                         (App('e1', 'e2'), 
+                                    lambda e1,e2: '%s(%s)' % (pp(e1), pp(e2))))
+
+        def is_val(e):
+            return match(e, 
+                  (Abs, lambda: True),
+                  ('_',      lambda: False))
+        def step(e):
+            return match(e,
+                         (App(Abs('x', 'e1'), 'e2'), 
+                              Guard(lambda x,e1,e2: is_val(e2)),
+                                    lambda x,e1,e2: subst(e1, x, e2)),
+                         (App(As('e1', Abs), 'e2'), 
+                                    lambda e1,e2: App(e1, step(e2))),
+                         (App('e1', 'e2'), 
+                                    lambda e1,e2: App(step(e1), e2)),
+                         name='step')
+        def subst(e, x, v):
+            return match((e, x),
+                         ((App('e1', 'e2'), '_'), 
+                                    lambda e1,e2: App(subst(e1,x,v), subst(e2,x,v))),
+                         ((As('e1',Abs('x', 'eb')), 'x'), 
+                                    lambda e1,x,eb: e1),
+                         ((Abs('y','e'), '_'), 
+                                    lambda y,e: Abs(y,subst(e,x,v))),
+                         ((Var('x'), 'x'), 
+                                    lambda x: v),
+                         ((Var('y'), '_'), 
+                                    lambda y: Var(y)))
+        def leval(e):
+            return match(e,
+                         ('_', Guard(lambda: is_val(e)), lambda: e),
+                         ('_',                           lambda: leval(step(e))))
+
+        plus = Abs('m', Abs('n', Abs('f', Abs('x',
+                                              App(
+                                                  App(Var('m'), Var('f')),
+                                                  App(
+                                                      App(Var('n'), Var('f')),
+                                                      Var('x')))))))
+        zero = Abs('f', Abs('x', Var('x')))
+        one = Abs('f', Abs('x', App(Var('f'), Var('x'))))
+        two = Abs('f', Abs('x', App(Var('f'),
+                                    App(Var('f'), 
+                                        Var('x')))))
+        three = Abs('f', Abs('x', App(Var('f'), 
+                                      App(Var('f'),
+                                          App(Var('f'), 
+                                              Var('x'))))))
+        threeq = leval(App(App(plus, one), two))
         psucc = lambda x: x + 1
 
         self.assertEqual(
-            eval(self.pp(three))(psucc)(0), 
-            eval(self.pp(threeq))(psucc)(0))
+            eval(pp(three))(psucc)(0), 
+            eval(pp(threeq))(psucc)(0))
+
+
+
+
+
+
+    # class LC(PureMatchable):
+    #     pass
+    # class Abs(LC):
+    #     def __init__(self, x, e): pass
+    # class App(LC):
+    #     def __init__(self, e1, e2): pass
+    # class Var(LC):
+    #     def __init__(self, x): pass
+        
+
+    # # Lambda calculus
+
+    # def pp(self, e):
+    #     return match(e, 
+    #                  (self.Var('x'), 
+    #                             lambda x: x),
+    #                  (self.Abs('x', 'e'), 
+    #                             lambda x,e: '(lambda %s: %s)' % (x, self.pp(e))),
+    #                  (self.App('e1', 'e2'), 
+    #                             lambda e1,e2: '%s(%s)' % (self.pp(e1), self.pp(e2))))
+
+    # def is_val(self, e):
+    #     return match(e, 
+    #           (self.Abs, lambda: True),
+    #           ('_',      lambda: False))
+    # def step(self, e):
+    #     return match(e,
+    #                  (self.App(self.Abs('x', 'e1'), 'e2'), 
+    #                       Guard(lambda x,e1,e2: self.is_val(e2)),
+    #                             lambda x,e1,e2: self.subst(e1, x, e2)),
+    #                  (self.App(As('e1', self.Abs), 'e2'), 
+    #                             lambda e1,e2: self.App(e1, self.step(e2))),
+    #                  (self.App('e1', 'e2'), 
+    #                             lambda e1,e2: self.App(self.step(e1), e2)))
+    # def subst(self, e, x, v):
+    #     return match((e, x),
+    #                  ((self.App('e1', 'e2'), '_'), 
+    #                             lambda e1,e2: self.App(self.subst(e1,x,v), self.subst(e2,x,v))),
+    #                  ((As('e1',self.Abs('x', 'eb')), 'x'), 
+    #                             lambda e1,x,eb: e1),
+    #                  ((self.Abs('y','e'), '_'), 
+    #                             lambda y,e: self.Abs(y,self.subst(e,x,v))),
+    #                  ((self.Var('x'), 'x'), 
+    #                             lambda x: v),
+    #                  ((self.Var('y'), '_'), 
+    #                             lambda y: self.Var(y)))
+    # def eval(self, e):
+    #     return match(e,
+    #                  ('_', Guard(lambda: self.is_val(e)), lambda: e),
+    #                  ('_',                                lambda: self.eval(self.step(e))))
+
+    # def test_lambda(self):
+    #     plus = self.Abs('m', self.Abs('n', self.Abs('f', self.Abs('x',
+    #                                           self.App(
+    #                                               self.App(self.Var('m'), self.Var('f')),
+    #                                               self.App(
+    #                                                   self.App(self.Var('n'), self.Var('f')),
+    #                                                   self.Var('x')))))))
+    #     zero = self.Abs('f', self.Abs('x', self.Var('x')))
+    #     one = self.Abs('f', self.Abs('x', self.App(self.Var('f'), self.Var('x'))))
+    #     two = self.Abs('f', self.Abs('x', self.App(self.Var('f'),
+    #                                                self.App(self.Var('f'), 
+    #                                                         self.Var('x')))))
+    #     three = self.Abs('f', self.Abs('x', self.App(self.Var('f'), 
+    #                                                  self.App(self.Var('f'),
+    #                                                           self.App(self.Var('f'), 
+    #                                                                    self.Var('x'))))))
+    #     threeq = self.eval(self.App(self.App(plus, one), two))
+    #     psucc = lambda x: x + 1
+
+    #     self.assertEqual(
+    #         eval(self.pp(three))(psucc)(0), 
+    #         eval(self.pp(threeq))(psucc)(0))
                                
 if __name__ == '__main__':
     unittest.main()

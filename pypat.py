@@ -49,7 +49,7 @@ class PairList:
 class EmptyList:
     pass
 
-def match(target, *cases):
+def match(target, *cases, name=None):
     for pattern, *rest, action in cases:
         validate(rest, action)
         patterns = [pattern] + [p.pattern for p in rest if isinstance(p, Or)]
@@ -60,7 +60,8 @@ def match(target, *cases):
             if maps is not False and all(guard(**maps) for guard in guards):
                 return action(**maps)
 
-    raise PatternException('No pattern matches %s' % str(target))
+    raise PatternException('No pattern matches %s%s' % (str(target), 
+                                                        ('' if (name is None) else (' in %s' % name))))
 
 def validate(rest,action):
     if not (callable(action) and \
